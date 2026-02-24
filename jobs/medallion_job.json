@@ -1,0 +1,12 @@
+{
+  "name": "MedallionPipeline",
+  "tasks": [
+    {
+      "task_key": "main",
+      "notebook_task": {
+        "notebook_path": "/Shared/medallion/src/main"
+      },
+      "existing_cluster_id": "YOUR_CLUSTER_ID"
+    }
+  ]
+}
