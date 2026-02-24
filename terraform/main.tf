@@ -16,10 +16,14 @@ provider "azurerm" {
   client_id       = var.client_id
   client_secret   = var.client_secret
 }
-
 provider "databricks" {
   host = azurerm_databricks_workspace.ws.workspace_url
+
+  azure_client_id     = var.client_id
+  azure_client_secret = var.client_secret
+  azure_tenant_id     = var.tenant_id
 }
+
 
 resource "azurerm_resource_group" "rg" {
   name     = "rg-medallion"
