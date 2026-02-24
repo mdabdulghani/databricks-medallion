@@ -9,13 +9,66 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # -----------------------------
+      # Checkout
+      # -----------------------------
       - uses: actions/checkout@v3
 
+      # -----------------------------
+      # Azure Login (existing)
+      # -----------------------------
       - name: Azure Login
         uses: azure/login@v1
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
+      # -----------------------------
+      # Install Databricks CLI
+      # -----------------------------
+      - name: Install Databricks CLI
+        run: pip install databricks-cli
+
+      # -----------------------------
+      # Get Databricks Host from Terraform (optional)
+      # If workspace already exists you can hardcode
+      # -----------------------------
+      - name: Terraform Output Host
+        id: dbx
+        working-directory: terraform
+        run: |
+          terraform init
+          echo "DBX_HOST=$(terraform output -raw databricks_host)" >> $GITHUB_ENV
+        env:
+          TF_VAR_client_id: ${{ fromJson(secrets.AZURE_CREDENTIALS).clientId }}
+          TF_VAR_client_secret: ${{ fromJson(secrets.AZURE_CREDENTIALS).clientSecret }}
+          TF_VAR_tenant_id: ${{ fromJson(secrets.AZURE_CREDENTIALS).tenantId }}
+          TF_VAR_subscription_id: ${{ fromJson(secrets.AZURE_CREDENTIALS).subscriptionId }}
+
+      # -----------------------------
+      # Configure Databricks CLI (AAD token)
+      # -----------------------------
+      - name: Configure Databricks
+        run: |
+          databricks configure --aad-token <<EOF
+          ${{ env.DBX_HOST }}
+          EOF
+        env:
+          AZURE_CLIENT_ID: ${{ fromJson(secrets.AZURE_CREDENTIALS).clientId }}
+          AZURE_CLIENT_SECRET: ${{ fromJson(secrets.AZURE_CREDENTIALS).clientSecret }}
+          AZURE_TENANT_ID: ${{ fromJson(secrets.AZURE_CREDENTIALS).tenantId }}
+
+      # -----------------------------
+      # Upload Notebook + Bronze/Silver/Gold
+      # -----------------------------
+      - name: Upload Notebooks
+        run: |
+          databricks workspace mkdirs /Shared/medallion/src
+          databricks workspace import src/main.py /Shared/medallion/src/main --language PYTHON --overwrite
+          databricks workspace import_dir src /Shared/medallion/src --overwrite
+
+      # -----------------------------
+      # Terraform Apply (Job Creation)
+      # -----------------------------
       - uses: hashicorp/setup-terraform@v2
 
       - name: Terraform Init

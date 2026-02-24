@@ -4,4 +4,4 @@ from gold.revenue import run as gold
 
 bronze(spark)
 silver(spark)
-gold(spark)s
+gold(spark)
