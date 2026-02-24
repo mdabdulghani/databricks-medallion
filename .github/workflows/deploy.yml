@@ -9,25 +9,14 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v3
 
-      ############################################
-      # Azure Login
-      ############################################
       - name: Azure Login
         uses: azure/login@v1
         with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-          client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      ############################################
-      # Setup Terraform
-      ############################################
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v2
+      - uses: hashicorp/setup-terraform@v2
 
       - name: Terraform Init
         working-directory: terraform
@@ -37,7 +26,7 @@ jobs:
         working-directory: terraform
         run: terraform apply -auto-approve
         env:
-          TF_VAR_client_id: ${{ secrets.AZURE_CLIENT_ID }}
-          TF_VAR_client_secret: ${{ secrets.AZURE_CLIENT_SECRET }}
-          TF_VAR_tenant_id: ${{ secrets.AZURE_TENANT_ID }}
-          TF_VAR_subscription_id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          TF_VAR_client_id: ${{ fromJson(secrets.AZURE_CREDENTIALS).clientId }}
+          TF_VAR_client_secret: ${{ fromJson(secrets.AZURE_CREDENTIALS).clientSecret }}
+          TF_VAR_tenant_id: ${{ fromJson(secrets.AZURE_CREDENTIALS).tenantId }}
+          TF_VAR_subscription_id: ${{ fromJson(secrets.AZURE_CREDENTIALS).subscriptionId }}
