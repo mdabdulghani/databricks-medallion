@@ -16,7 +16,7 @@ jobs:
     - uses: actions/checkout@v3
 
     # -----------------------------
-    # Azure Login
+    # Azure Login (Terraform only)
     # -----------------------------
     - name: Azure Login
       uses: azure/login@v1
@@ -30,16 +30,16 @@ jobs:
       uses: hashicorp/setup-terraform@v2
 
     # -----------------------------
-    # Terraform Init (infra only)
+    # Terraform Init
     # -----------------------------
     - name: Terraform Init
       working-directory: terraform
       run: terraform init
 
     # -----------------------------
-    # Terraform Apply (create workspace)
+    # Terraform Apply (Workspace + Job)
     # -----------------------------
-    - name: Terraform Apply Infra
+    - name: Terraform Apply
       working-directory: terraform
       run: terraform apply -auto-approve
       env:
@@ -49,12 +49,23 @@ jobs:
         TF_VAR_subscription_id: ${{ fromJson(secrets.AZURE_CREDENTIALS).subscriptionId }}
 
     # -----------------------------
-    # Get Databricks Host
+    # Get Databricks Host (SAFE)
     # -----------------------------
     - name: Get Databricks Host
       working-directory: terraform
+      shell: bash
       run: |
-        echo "DBX_HOST=$(terraform output -raw databricks_host)" >> $GITHUB_ENV
+        set -e
+        DBX=$(terraform output -raw databricks_host 2>/dev/null || true)
+
+        if [ -z "$DBX" ]; then
+          echo "ERROR: databricks_host not found"
+          terraform output
+          exit 1
+        fi
+
+        echo "Resolved Databricks Host: $DBX"
+        echo "DBX_HOST=$DBX" >> $GITHUB_ENV
 
     # -----------------------------
     # Install Databricks CLI
@@ -63,17 +74,14 @@ jobs:
       run: pip install databricks-cli
 
     # -----------------------------
-    # Configure Databricks
+    # Configure Databricks (PAT – stable)
     # -----------------------------
     - name: Configure Databricks
       run: |
-        databricks configure --aad-token <<EOF
-        ${{ env.DBX_HOST }}
+        databricks configure --token <<EOF
+        https://${{ env.DBX_HOST }}
+        ${{ secrets.DATABRICKS_TOKEN }}
         EOF
-      env:
-        AZURE_CLIENT_ID: ${{ fromJson(secrets.AZURE_CREDENTIALS).clientId }}
-        AZURE_CLIENT_SECRET: ${{ fromJson(secrets.AZURE_CREDENTIALS).clientSecret }}
-        AZURE_TENANT_ID: ${{ fromJson(secrets.AZURE_CREDENTIALS).tenantId }}
 
     # -----------------------------
     # Upload Notebooks
@@ -83,15 +91,3 @@ jobs:
         databricks workspace mkdirs /Shared/medallion/src
         databricks workspace import src/main.py /Shared/medallion/src/main --language PYTHON --overwrite
         databricks workspace import_dir src /Shared/medallion/src --overwrite
-
-    # -----------------------------
-    # Terraform Apply (create job)
-    # -----------------------------
-    - name: Terraform Apply Job
-      working-directory: terraform
-      run: terraform apply -auto-approve
-      env:
-        TF_VAR_client_id: ${{ fromJson(secrets.AZURE_CREDENTIALS).clientId }}
-        TF_VAR_client_secret: ${{ fromJson(secrets.AZURE_CREDENTIALS).clientSecret }}
-        TF_VAR_tenant_id: ${{ fromJson(secrets.AZURE_CREDENTIALS).tenantId }}
-        TF_VAR_subscription_id: ${{ fromJson(secrets.AZURE_CREDENTIALS).subscriptionId }}
