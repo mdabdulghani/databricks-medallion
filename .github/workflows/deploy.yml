@@ -2,7 +2,7 @@ name: Databricks CICD
 
 on:
  push:
-  branches: [main]
+   branches: [main]
 
 jobs:
  deploy:
@@ -11,14 +11,29 @@ jobs:
   steps:
    - uses: actions/checkout@v3
 
-   - run: pip install databricks-cli
+   - name: Install Terraform
+     uses: hashicorp/setup-terraform@v2
 
-   - run: |
-      databricks configure --token <<EOF
-      ${{ secrets.DATABRICKS_HOST }}
-      ${{ secrets.DATABRICKS_TOKEN }}
+   - name: Terraform Apply
+     working-directory: terraform
+     run: terraform init && terraform apply -auto-approve
+     env:
+       ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+       ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+       ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+       ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+   - name: Install Databricks CLI
+     run: pip install databricks-cli
+
+   - name: Configure Databricks via Azure AD
+     run: |
+      databricks configure --aad-token <<EOF
+      https://adb-xxxx.azuredatabricks.net
       EOF
 
-   - run: databricks workspace import_dir src /Shared/medallion/src --overwrite
+   - name: Upload Code
+     run: databricks workspace import_dir src /Shared/medallion/src --overwrite
 
-   - run: databricks jobs create --json-file jobs/medallion_job.json
+   - name: Run Job
+     run: databricks jobs run-now --job-id 1
