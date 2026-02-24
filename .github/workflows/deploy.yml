@@ -1,4 +1,4 @@
-name: Databricks + Terraform CICD
+name: Terraform + Databricks Deploy
 
 on:
   push:
@@ -9,11 +9,23 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout Code
+        uses: actions/checkout@v3
 
-      # -----------------------------
-      # STEP 1 - Terraform Init & Apply (Infra only)
-      # -----------------------------
+      ############################################
+      # Azure Login
+      ############################################
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
+
+      ############################################
+      # Setup Terraform
+      ############################################
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
 
@@ -21,54 +33,7 @@ jobs:
         working-directory: terraform
         run: terraform init
 
-      - name: Terraform Apply (Create Workspace)
-        working-directory: terraform
-        run: terraform apply -auto-approve
-        env:
-          TF_VAR_client_id: ${{ secrets.AZURE_CLIENT_ID }}
-          TF_VAR_client_secret: ${{ secrets.AZURE_CLIENT_SECRET }}
-          TF_VAR_tenant_id: ${{ secrets.AZURE_TENANT_ID }}
-          TF_VAR_subscription_id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-
-      # -----------------------------
-      # STEP 2 - Get Databricks Host
-      # -----------------------------
-      - name: Get Databricks Host
-        id: dbxhost
-        working-directory: terraform
-        run: |
-          echo "DBX_HOST=$(terraform output -raw databricks_host)" >> $GITHUB_ENV
-
-      # -----------------------------
-      # STEP 3 - Install Databricks CLI
-      # -----------------------------
-      - name: Install Databricks CLI
-        run: pip install databricks-cli
-
-      # -----------------------------
-      # STEP 4 - Authenticate via Azure AD
-      # -----------------------------
-      - name: Configure Databricks
-        run: |
-          databricks configure --aad-token <<EOF
-          ${{ env.DBX_HOST }}
-          EOF
-        env:
-          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
-          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-
-      # -----------------------------
-      # STEP 5 - Upload Notebooks (FIX)
-      # -----------------------------
-      - name: Upload Notebooks
-        run: |
-          databricks workspace import_dir src /Shared/medallion/src --overwrite
-
-      # -----------------------------
-      # STEP 6 - Create Job (AFTER notebook exists)
-      # -----------------------------
-      - name: Create Job
+      - name: Terraform Apply
         working-directory: terraform
         run: terraform apply -auto-approve
         env:
